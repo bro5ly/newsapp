@@ -1,0 +1,14 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# package 情報だけ先にコピー（キャッシュ効かせる）
+COPY package.json package-lock.json ./
+
+# 依存関係インストール
+RUN npm ci
+
+# ソースコードは volume mount するので COPY しない
+EXPOSE 3000
+
+CMD ["npm", "run", "dev"]
