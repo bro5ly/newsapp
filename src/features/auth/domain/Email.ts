@@ -1,8 +1,10 @@
+import { ValidationError } from "@/packages/domain/errors/ValidationError";
+
 export class Email {
     private readonly _value: string
     constructor(value: string){
         if(!this.validate(value)){
-            throw new Error(`不正なメールアドレスの形式です${value}`)
+            throw new ValidationError(`不正なメールアドレスの形式です`)
         }
         this._value = value.toLowerCase().trim()
     }

@@ -4,7 +4,7 @@ import { Password } from "./Password";
 
 export interface AuthRepository {
     signIn(email: Email, password: Password): Promise<Identity>
-    signUp(email: Email, password: Password): Promise<void>
+    signUp(email: Email, password: Password): Promise<Identity>
 
     getCurrentIdentity(): Promise<Identity | null>
     signOut(): Promise<void>
