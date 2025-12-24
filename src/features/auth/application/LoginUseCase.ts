@@ -1,48 +1,24 @@
-import { DomainError } from "@/packages/domain/errors/DomainError";
-import { AuthRepository } from "../domain/AuthRepository";
-import { Email } from "../domain/Email";
-import { Identity } from "../domain/Identity";
-import { Password } from "../domain/Password";
-import { AccountLockedError } from "../errors/AccountLockedError";
-
-export interface LoginInput {
-    email: string,
-    password: string
-}
-
-export type LoginResult = 
-    | { success: true, data: Identity }
-    | { success: false, error: { message: string, code: string } }
+// features/auth/application/LoginUseCase.ts
+import { AuthRepository } from "../infrastructure/AuthRepository";
+import { AuthResult } from "../infrastructure/AuthTypes";
 
 export class LoginUseCase {
-    constructor(private readonly authRepository: AuthRepository){}
+  constructor(private repository: AuthRepository) {}
 
-    async execute(input: LoginInput): Promise<LoginResult>{
-        try {
-            //voでバリデーションをかけてアプリのルール自体を適応させる
-            const email = new Email(input.email); 
-            const password = new Password(input.password)
-            
-            //インターフェースの引数にvoのインスタンスを渡す
-            const identity = await this.authRepository.signIn(email,password)
+  async execute(email: string, password: string): Promise<AuthResult<{ message: string }>> {
+    try {
+      // 簡易バリデーション（クラス化せずここでやる）
+      if (!email || !password) {
+        return { success: false, error: { message: '入力が足りません', code: 'INVALID_PARAMETER' } };
+      }
 
-            //エンティティには副作用を排除してビジネスロジックのみを書くべきなので、振る舞いを呼び出してここでエラー処理をする
-            if(!identity.canLogin()){
-                throw new AccountLockedError('このアカウントは凍結されています')
-            }
-
-            return { success: true, data: identity }
-            
-        } catch (err) {
-            //親クラスのDomainErrorで想定内の処理を判別して、errorのmessageとcodeで詳細を区別
-            if(err instanceof DomainError) {
-                return { success: false, error: { message: err.message, code: err.code } }
-            }
-
-            //想定しないエラー処理
-            console.error('unexpected error', err)
-            return { success: false, error: { message: '予期せぬエラーが発生しました。', code: 'UNKNOWN_ERROR'}}
-        }
-       
+      await this.repository.signIn(email, password);
+      return { success: true, data: { message: 'ログインに成功しました' } };
+    } catch (error: any) {
+      return { 
+        success: false, 
+        error: { message: '認証に失敗しました', code: 'AUTH_AUTHENTICATION_FAILED' } 
+      };
     }
+  }
 }

@@ -40,14 +40,20 @@ export default function SignUpPage() {
   };
 
   // Googleログイン（リダイレクト処理）
+  // Googleログイン（リダイレクト処理）
   const handleGoogleLogin = async () => {
     try {
-      // API経由でSupabaseのOAuth URLを取得
       const res = await fetch("/api/auth/google", { method: "POST" });
-      const { url } = await res.json();
-      if (url) window.location.href = url;
-    } catch (err) {
-      setError("Googleログインを開始できませんでした");
+      const result = await res.json(); // 一旦全体を受け取る
+
+      // API側は { data: { url: "..." } } で返しているので result.data.url を参照する
+      if (res.ok && result.data?.url) {
+        window.location.href = result.data.url;
+      } else {
+        throw new Error(result.error?.message || "URLの取得に失敗しました");
+      }
+    } catch (err: any) {
+      setError(err.message || "Googleログインを開始できませんでした");
     }
   };
 

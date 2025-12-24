@@ -1,80 +1,42 @@
-import { SupabaseClient } from "@supabase/supabase-js";
-import { AuthRepository } from "../domain/AuthRepository";
-import { Email } from "../domain/Email";
-import { Identity } from "../domain/Identity";
-import { Password } from "../domain/Password";
-import { AuthenticationError } from "../errors/AuthenticationError";
-import { InfrastructureError } from "../errors/InfrastructureError";
+// features/auth/infrastructure/SupabaseAuthRepository.ts
+import { SupabaseClient } from '@supabase/supabase-js';
+import { AuthRepository } from './AuthRepository';
+import { AuthUser } from './AuthTypes';
 
-export class SupabaseAuthRepository implements AuthRepository{
-    constructor(private readonly supabase: SupabaseClient){}
+export class SupabaseAuthRepository implements AuthRepository {
+  constructor(private supabase: SupabaseClient) {}
 
-    async signIn(email: Email, password: Password): Promise<Identity> {
-        //voインスタンスを文字列に戻してsupabaeクライアントを用いて認証
-        const { data: { user },error } = await this.supabase.auth.signInWithPassword({
-            email: email.toString(),
-            password: password.getRowValue()
-        })
+  async signIn(email: string, password: string): Promise<void> {
+    const { error } = await this.supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+  }
 
-        //エラーかユーザーデータが存在しないとき、カスタムエラーを用いてプロセスを強制停止
-        if(error){
-            if(error.status === 400){
-                throw new AuthenticationError('メールまたはパスワードが正しくありません')
-            }
-            throw new InfrastructureError(error.message)
-        }
-        if(!user) throw new InfrastructureError('ユーザーデータが見つかりませんでした')
-        
-        //生データをエンティティクラスに変換
-        return this.mapToDomain(user)
-    }
+  async signUp(email: string, password: string): Promise<void> {
+    const { error } = await this.supabase.auth.signUp({ email, password });
+    if (error) throw error;
+  }
 
-    async getCurrentIdentity(): Promise<Identity | null> {
-        //supabaseで認証とユーザー情報の取得
-        const {data: {user}, error} = await this.supabase.auth.getUser();
+  async signOut(): Promise<void> {
+    await this.supabase.auth.signOut();
+  }
 
-        //確認だけなのでエラーの発生、もしくはユーザーが存在しない場合nullを返す
-        if(error || !user) return null;
+  async getCurrentUser(): Promise<AuthUser | null> {
+    const { data: { user }, error } = await this.supabase.auth.getUser();
+    if (error || !user) return null;
+    return { id: user.id, email: user.email ?? '' };
+  }
 
-        return this.mapToDomain(user)
-    }
+  async signInWithGoogle(): Promise<{ url: string }> {
+    const { data, error } = await this.supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/api/auth/callback` }
+    });
+    if (error) throw error;
+    return { url: data.url };
+  }
 
-    async signUp(email: Email, password: Password): Promise<Identity> {
-        const {data: {user}, error} = await this.supabase.auth.signUp({
-            email: email.toString(),
-            password: password.getRowValue()
-        });
-        
-        if (error) throw new InfrastructureError(error.message)
-        
-        if(!user) throw new InfrastructureError('ユーザー作成に失敗しました')
-        
-        return this.mapToDomain(user)
-    }
-
-    async signOut(): Promise<void> {
-        await this.supabase.auth.signOut();
-    }
-
-    async resetPassword(email: Email): Promise<void> {
-        await this.supabase.auth.resetPasswordForEmail(email.toString())
-    }
-
-    private mapToDomain(supabaseUser: any): Identity {
-        //デフォはアクティブ（ここの型は別で定義してエンティティと共有するべき...?）
-        let status : 'active' | 'locked' = 'active'
-
-        //アカウント凍結の検証
-        if(supabaseUser.banned_untill || supabaseUser.user_metadata?.is_banned){
-            status = 'locked'
-        }
-        
-        //インスタンスの生成
-        return new Identity(
-            supabaseUser.id,
-            new Email(supabaseUser.email || ''),
-            status,
-            !!supabaseUser.email_comfirmed_at
-        )
-    }
+  async exchangeCodeForSession(code: string): Promise<void> {
+    const { error } = await this.supabase.auth.exchangeCodeForSession(code);
+    if (error) throw error;
+  }
 }
