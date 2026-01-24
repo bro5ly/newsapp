@@ -82,9 +82,14 @@ export class SupabasePostRepository implements PostRepository {
              * 1. 自分の投稿 (user_id = currentUserId) は常に表示
              * 2. 他人の投稿は PRIVATE ではない、かつ (期限が設定されていない OR 現在時刻より先)
              */
-            .or(`user_id.eq.${currentUserId},and(privacy_scope.neq.PRIVATE,or(visibility_expires_at.is.null,visibility_expires_at.gt.${now}))`)
-            .order('created_at', { ascending: false });
+            // .or(`user_id.eq.${currentUserId},and(privacy_scope.neq.PRIVATE,or(visibility_expires_at.is.null,visibility_expires_at.gt.${now}))`)
+            // .or(`user_id.eq.${currentUserId},and(privacy_scope.neq.PRIVATE,or(visibility_expires_at.is.null,visibility_expires_at.gt.${now}))`)
+            // .order('created_at', { ascending: false });
 
+            .or(`visibility_expires_at.is.null,visibility_expires_at.gt.${now}`)
+            // 2. 次に「自分のもの」か「公開されている他人のもの」か
+            .or(`user_id.eq.${currentUserId},privacy_scope.neq.PRIVATE`)
+            .order('created_at', { ascending: false });
         if (error || !data) return [];
 
         return data.map(item => this.mapToEntity(item));

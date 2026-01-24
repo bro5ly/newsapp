@@ -21,20 +21,38 @@ export async function GET() {
     try {
         const posts = await useCase.execute(user.id);
 
-        // エンティティをJSONに変換して返す
-        const responseData = posts.map(post => ({
-            id: post.id,
-            userId: post.userId,
-            title: post.title,
-            content: post.content,
-            videoUrl: post.videoUrl,
-            sceneType: post.sceneType,
-            privacyScope: post.privacyScope,
-            status: post.status,
-            createdAt: post.createdAt,
-        }));
+        // 各投稿のコメント数とdisplay_nameを取得
+        const postsWithCommentCount = await Promise.all(
+            posts.map(async (post) => {
+                const [commentResult, profileResult] = await Promise.all([
+                    supabase
+                        .from('comments')
+                        .select('*', { count: 'exact', head: true })
+                        .eq('post_id', post.id),
+                    supabase
+                        .from('profiles')
+                        .select('display_name')
+                        .eq('id', post.userId)
+                        .single()
+                ]);
 
-        return NextResponse.json(responseData);
+                return {
+                    id: post.id,
+                    userId: post.userId,
+                    displayName: profileResult.data?.display_name || null,
+                    title: post.title,
+                    content: post.content,
+                    videoUrl: post.videoUrl,
+                    sceneType: post.sceneType,
+                    privacyScope: post.privacyScope,
+                    status: post.status,
+                    createdAt: post.createdAt,
+                    commentCount: commentResult.count ?? 0,
+                };
+            })
+        );
+
+        return NextResponse.json(postsWithCommentCount);
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }

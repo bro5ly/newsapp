@@ -1,59 +1,135 @@
-// src/middleware.ts (Next.js標準の場所)
+// // src/middleware.ts (Next.js標準の場所)
 
-import { NextResponse, type NextRequest } from 'next/server';
-// こっちが「道具」としてのsupabase middleware
-import { updateSession } from '@/lib/supabase/middleware'; 
-import { createClient } from '@/lib/supabase/server'; // または middleware用のclient
+// import { NextResponse, type NextRequest } from 'next/server';
+// // こっちが「道具」としてのsupabase middleware
+// import { updateSession } from '@/lib/supabase/middleware'; 
+// import { createClient } from '@/lib/supabase/server'; // または middleware用のclient
 
-export async function middleware(request: NextRequest) {
-  // 1. まずSupabaseのセッションを更新する（公式の定型処理）
-  // これにより、有効期限切れのトークンが自動で更新されます
-  let response = await updateSession(request);
+// export async function middleware(request: NextRequest) {
+//   // 1. まずSupabaseのセッションを更新する（公式の定型処理）
+//   // これにより、有効期限切れのトークンが自動で更新されます
+//   let response = await updateSession(request);
 
-  // 2. 認証・認可のロジック（ここからが本番）
-  const supabase = await createClient(); // サーバーサイドクライアント
-  const { data: { user } } = await supabase.auth.getUser();
+//   // 2. 認証・認可のロジック（ここからが本番）
+//   const supabase = await createClient(); // サーバーサイドクライアント
+//   const { data: { user } } = await supabase.auth.getUser();
 
-  const url = request.nextUrl.clone();
-  const path = url.pathname;
+//   const url = request.nextUrl.clone();
+//   const path = url.pathname;
 
-  // 1. APIルートへのリクエストは、一切の加工をせずそのまま通過させる
-  if (path.startsWith('/api/')) {
-    return NextResponse.next();
+//   // 1. APIルートへのリクエストは、一切の加工をせずそのまま通過させる
+//   if (path.startsWith('/api/')) {
+//     return NextResponse.next();
+//   }
+
+//   // --- ガードのロジック ---
+
+//   // 未ログイン時の処理
+//   if (!user && !['/login', '/signup', '/api/auth'].some(p => path.startsWith(p))) {
+//     return NextResponse.redirect(new URL('/login', request.url));
+//   }
+
+//   // ログイン済みなら status をチェック
+//   if (user) {
+//     const { data: profile } = await supabase
+//       .from('profiles')
+//       .select('status')
+//       .eq('id', user.id)
+//       .single();
+
+//     const status = profile?.status;
+
+//     // INITIALIZING なのに /setup 以外にいたら飛ばす
+//     if (status === 'INITIALIZING' && path !== '/setup') {
+//       return NextResponse.redirect(new URL('/setup', request.url));
+//     }
+
+//     // ACTIVE なのに /setup にいたらダッシュボードへ
+//     if (status === 'ACTIVE' && path === '/setup') {
+//       return NextResponse.redirect(new URL('/dashboard', request.url));
+//     }
+//   }
+
+//   return response;
+// }
+
+// // 静的ファイルなどには適用しない設定
+// export const config = {
+//   matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+// };
+
+// src/middleware.ts
+// import { NextResponse, type NextRequest } from 'next/server'
+
+// export function middleware(request: NextRequest) {
+//   const path = request.nextUrl.pathname
+
+//   // APIは素通し
+//   if (path.startsWith('/api')) {
+//     return NextResponse.next()
+//   }
+
+//   // Supabase の session cookie があるかだけを見る
+//   const hasSession =
+//     request.cookies.get('sb-access-token') ||
+//     request.cookies.get('sb:token')
+
+//   // // 未ログインで保護ページに来たら login へ
+//   // if (!hasSession && path.startsWith('/dashboard')) {
+//   //   return NextResponse.redirect(new URL('/login', request.url))
+//   // }
+
+//   // ログイン済みで auth ページに来たら dashboard へ
+//   if (hasSession && (path === '/login' || path === '/signup')) {
+//     return NextResponse.redirect(new URL('/dashboard', request.url))
+//   }
+
+//   return NextResponse.next()
+// }
+
+// export const config = {
+//   matcher: [
+//     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+//   ],
+// }
+import { NextResponse, type NextRequest } from 'next/server'
+
+export function middleware(request: NextRequest) {
+  const path = request.nextUrl.pathname
+
+  // 1. 静的ファイルやAPIは認証チェックの対象外にする
+  if (
+    path.startsWith('/api') ||
+    path.includes('.') ||
+    path.startsWith('/_next')
+  ) {
+    return NextResponse.next()
   }
 
-  // --- ガードのロジック ---
-  
-  // 未ログイン時の処理
-  if (!user && !['/login', '/signup', '/api/auth'].some(p => path.startsWith(p))) {
-    return NextResponse.redirect(new URL('/login', request.url));
+  // 2. Supabase のセッションクッキーがあるか確認
+  const allCookies = request.cookies.getAll()
+  const hasSession = allCookies.some(c => c.name.startsWith('sb-'))
+
+  const isAuthPage = path === '/login' || path === '/signup'
+
+  // 3. 【未ログイン状態】ログイン・新規登録ページ以外にアクセスしたら /login へ
+  if (!hasSession && !isAuthPage) {
+    return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // ログイン済みなら status をチェック
-  if (user) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('status')
-      .eq('id', user.id)
-      .single();
-
-    const status = profile?.status;
-
-    // INITIALIZING なのに /setup 以外にいたら飛ばす
-    if (status === 'INITIALIZING' && path !== '/setup') {
-      return NextResponse.redirect(new URL('/setup', request.url));
-    }
-    
-    // ACTIVE なのに /setup にいたらダッシュボードへ
-    if (status === 'ACTIVE' && path === '/setup') {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
-    }
+  // 4. 【ログイン済み状態】ログイン・新規登録ページにアクセスしたら /dashboard へ
+  if (hasSession && isAuthPage) {
+    return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
-  return response;
+  return NextResponse.next()
 }
 
-// 静的ファイルなどには適用しない設定
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
-};
+  matcher: [
+    /*
+     * 画像やファビコンを除外するための正規表現
+     */
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
+}

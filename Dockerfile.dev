@@ -4,6 +4,8 @@ WORKDIR /app
 
 RUN apk add --no-cache git
 
+RUN apk add --no-cache ffmpeg
+
 # package 情報だけ先にコピー（キャッシュ効かせる）
 COPY package.json package-lock.json ./
 

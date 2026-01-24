@@ -29,7 +29,7 @@ export default function SetupPage() {
 
       // 成功したらダッシュボードへ
       // Middlewareが次から「ACTIVE」として認識し、アクセスを許可します
-      router.push("/dashboard");
+      router.push("/posts/new");
       router.refresh(); // Middlewareの状態を再計算させるためにリフレッシュ
     } catch (err: any) {
       setError(err.message);
